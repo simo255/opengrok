@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+# start|stop|status for grok-tg-mirror
+set -euo pipefail
+DIR="$(cd "$(dirname "$0")" && pwd)"
+PIDFILE="${GROK_TG_MIRROR_PID:-${HOME}/.local/state/grok-tg-mirror/mirror.pid}"
+LOG="${GROK_TG_MIRROR_LOG:-/tmp/grok-tg-mirror.log}"
+BIN="${GROK_TG_MIRROR_BIN:-$DIR/grok-tg-mirror.py}"
+mkdir -p "$(dirname "$PIDFILE")"
+
+is_running() {
+  [[ -f "$PIDFILE" ]] || return 1
+  local pid
+  pid=$(cat "$PIDFILE")
+  [[ -n "$pid" ]] || return 1
+  kill -0 "$pid" 2>/dev/null
+}
+
+case "${1:-status}" in
+  start)
+    if is_running; then
+      echo "already running pid $(cat "$PIDFILE")"
+      exit 0
+    fi
+    nohup python3 "$BIN" >>"$LOG" 2>&1 &
+    echo $! >"$PIDFILE"
+    echo "started pid $(cat "$PIDFILE") log $LOG"
+    ;;
+  stop)
+    if is_running; then
+      kill "$(cat "$PIDFILE")" 2>/dev/null || true
+      rm -f "$PIDFILE"
+      echo "stopped"
+    else
+      rm -f "$PIDFILE"
+      echo "not running"
+    fi
+    ;;
+  status)
+    if is_running; then
+      echo "running pid $(cat "$PIDFILE")"
+    else
+      echo "not running"
+      exit 1
+    fi
+    ;;
+  *)
+    echo "usage: grok-tg-mirror-ctl start|stop|status" >&2
+    exit 2
+    ;;
+esac
