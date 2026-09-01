@@ -134,10 +134,18 @@ def main() -> int:
         "provider-maps-hop.cjs",
         "hop-server.py",
         "wrap_proto_session.py",
+        "set-inference-mode.sh",
     ):
         copy_tool(name, data)
 
     write_bindings(data / "model-bindings.json", args.model, hop_base, args.agent_id)
+
+    mode_path = data / "inference-mode.json"
+    if not mode_path.is_file():
+        example = HERE.parent / "examples" / "inference-mode.example.json"
+        if example.is_file():
+            shutil.copy2(example, mode_path)
+            print("  inference-mode -> %s (glm-hop default)" % mode_path)
 
     stamp = time.strftime("%Y%m%dT%H%M%SZ")
     backup = data / ("host-main.cjs.pre-opengrok-%s" % stamp)

@@ -1,0 +1,4 @@
+{
+  "_comment": "Inference backend for stock Grok Bot + opengrok wrap. native = stock Grok/xAI. glm-hop = OpenAI-compatible hop (model-bindings.json). Switch: tools/set-inference-mode.sh",
+  "mode": "glm-hop"
+}

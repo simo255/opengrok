@@ -46,15 +46,42 @@ python3 tools/install-stock-box.py --census-only
 
 Re-run is idempotent. The wrap marker is `/* opengrok-stock-wrap */`.
 
-## Fail-closed
+## Fail-closed (glm-hop mode)
 
-If there is no binding, the wrapped factory throws. It does not silently
-fall back to the plan-quota proto session.
+When `inference-mode.json` mode is **`glm-hop`** (default), if there is no
+binding, the wrapped factory throws. It does not silently fall back to the
+plan-quota proto session.
+
+When mode is **`native`**, opengrok bypasses the hop and uses stock Grok/xAI
+inference (Grok Bot model picker / subscription limits).
 
 If the host calls a session method the hop object does not implement, the
 turn errors and `/tmp/opengrok-session.log` records `missing-prop <name>`.
 Set `OPENGROK_PROBE_PROTO=1`, send one message, and read
 `/tmp/opengrok-proto-keys.json` for the real method names.
+
+## Inference switch (native Grok vs glm-hop)
+
+| Mode | Backend | Config |
+|------|---------|--------|
+| `glm-hop` (default) | Local hop + `model-bindings.json` | Z.AI / BYOK upstream via hop |
+| `native` | Stock `createProtoSessionProvider_stock` | Grok subscription / UI model |
+
+On the box after install:
+
+```bash
+$SAND_DATA/set-inference-mode.sh glm-hop   # hop lane (default)
+$SAND_DATA/set-inference-mode.sh native    # Grok own model
+$SAND_DATA/set-inference-mode.sh status
+```
+
+File: `$SAND_DATA/inference-mode.json` (see `examples/inference-mode.example.json`).
+Temporary override: `export SAND_INFERENCE_MODE=native`.
+
+Verify in `/tmp/opengrok-session.log`:
+
+- `inference mode=native -> stock Grok/xAI`
+- `route <model> -> http://127.0.0.1:...` (glm-hop)
 
 ## What this does not do
 

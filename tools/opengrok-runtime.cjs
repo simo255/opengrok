@@ -4,6 +4,9 @@ var hop = require("./openai-hop-session.cjs");
 
 var BINDINGS = process.env.OPENGROK_BINDINGS || "/home/box/sand-data/model-bindings.json";
 var LOG = process.env.OPENGROK_LOG || "/tmp/opengrok-session.log";
+var INFERENCE_MODE_FILE =
+  process.env.SAND_INFERENCE_MODE_FILE || "/home/box/sand-data/inference-mode.json";
+var INFERENCE_MODES = { NATIVE: "native", GLM_HOP: "glm-hop" };
 
 var DEFAULT_CONTEXT_WINDOW = (function () {
   var n = parseInt(process.env.OPENGROK_CONTEXT_WINDOW || "131072", 10);
@@ -63,6 +66,21 @@ function log(line) {
   } catch (e) {
     /* ignore */
   }
+}
+
+/** native = stock Grok/xAI via Cursor inference; glm-hop = Z.AI via openai-hop-session */
+function loadInferenceMode() {
+  var env = process.env.SAND_INFERENCE_MODE;
+  if (env === INFERENCE_MODES.NATIVE || env === INFERENCE_MODES.GLM_HOP) return env;
+  try {
+    var raw = fs.readFileSync(INFERENCE_MODE_FILE, "utf8");
+    var data = JSON.parse(raw);
+    var m = data && data.mode;
+    if (m === INFERENCE_MODES.NATIVE || m === INFERENCE_MODES.GLM_HOP) return m;
+  } catch (e) {
+    /* default below */
+  }
+  return INFERENCE_MODES.GLM_HOP;
 }
 
 function collectIds(args) {
@@ -688,6 +706,15 @@ function wrapSession(stockFn, args) {
     try { dumpProto(probed); } catch (e) { log("probe write failed: " + e.message); }
     return probed;
   }
+  var inferenceMode = loadInferenceMode();
+  if (inferenceMode === INFERENCE_MODES.NATIVE) {
+    var requestedNative = requestedModelId(arr);
+    log(
+      "inference mode=native -> stock Grok/xAI (set inference-mode.json or SAND_INFERENCE_MODE)" +
+        (requestedNative ? " requested=" + requestedNative : "")
+    );
+    return stockFn.apply(null, arr);
+  }
   var binding = resolveBinding(arr);
   if (!binding || !binding.hopBaseUrl || !binding.modelId) {
     var err = new Error("opengrok: no model binding for this turn (set agents['*'] or a matching agent id in model-bindings.json)");
@@ -716,6 +743,8 @@ module.exports = {
   wrapSession: wrapSession,
   resolveBinding: resolveBinding,
   collectIds: collectIds,
+  loadInferenceMode: loadInferenceMode,
+  INFERENCE_MODES: INFERENCE_MODES,
   completionsUrl: hop.completionsUrl,
   _testHooks: {
     extractEmbeddedStreamJson: extractEmbeddedStreamJson,

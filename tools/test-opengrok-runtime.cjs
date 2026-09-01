@@ -87,4 +87,12 @@ var cache = h.extractUsageExtras({
 assert.equal(cache.cacheReadTokens, 900);
 assert.equal(cache.cacheWriteTokens, 50);
 
+var prevMode = process.env.SAND_INFERENCE_MODE;
+process.env.SAND_INFERENCE_MODE = "native";
+assert.equal(rt.loadInferenceMode(), rt.INFERENCE_MODES.NATIVE);
+process.env.SAND_INFERENCE_MODE = "glm-hop";
+assert.equal(rt.loadInferenceMode(), rt.INFERENCE_MODES.GLM_HOP);
+if (prevMode) process.env.SAND_INFERENCE_MODE = prevMode;
+else delete process.env.SAND_INFERENCE_MODE;
+
 console.log("opengrok-runtime: ok");
