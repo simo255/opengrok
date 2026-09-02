@@ -332,6 +332,74 @@ function toOpenAIMessages(msgs) {
   return out.length ? out : [{ role: "user", content: "" }];
 }
 
+function buildSendToUserArgs(raw) {
+  if (!raw || typeof raw !== "object") return null;
+  var out = {};
+  if (raw.type === "text" || raw.type === "attachment" || raw.type === "widget" || raw.type === "cursor-agent" || raw.type === "secret-request") {
+    out.type = raw.type;
+    if (raw.content != null) out.content = String(raw.content);
+    if (raw.url != null) out.url = String(raw.url);
+    if (raw.widget != null) out.widget = raw.widget;
+    if (raw.bcId != null) out.bcId = String(raw.bcId);
+    if (raw.secret != null) out.secret = raw.secret;
+    if (Array.isArray(raw.images)) out.images = raw.images;
+  } else if (raw.text && raw.text.content != null) {
+    out.type = "text";
+    out.content = String(raw.text.content);
+  } else if (raw.content != null) {
+    out.type = "text";
+    out.content = String(raw.content);
+  } else {
+    return null;
+  }
+  if (raw.end_turn === true) out.end_turn = true;
+  if (out.type === "text" && !out.content) return null;
+  return out;
+}
+
+function normalizeRecoveredToolCall(parsed) {
+  if (!parsed || typeof parsed !== "object") return null;
+  if (parsed.type === "tool-call" && parsed.toolName) {
+    var name = parsed.toolName;
+    if (name === "SendToUser" || name === "SendMessage" || name === "send_message") {
+      var sendArgs = buildSendToUserArgs(parsed.args || {});
+      if (!sendArgs) return null;
+      return {
+        id: parsed.toolCallId || ("call_rec_" + Date.now()),
+        function: { name: "SendToUser", arguments: JSON.stringify(sendArgs) },
+      };
+    }
+    return {
+      id: parsed.toolCallId || ("call_rec_" + Date.now()),
+      function: { name: name, arguments: JSON.stringify(parsed.args || {}) },
+    };
+  }
+  var directArgs = buildSendToUserArgs(parsed);
+  if (directArgs) {
+    return {
+      id: "call_rec_" + Date.now(),
+      function: { name: "SendToUser", arguments: JSON.stringify(directArgs) },
+    };
+  }
+  return null;
+}
+
+function recoverTextToolCalls(text, existingCalls) {
+  if (existingCalls && existingCalls.length) return { text: text, calls: existingCalls };
+  var trimmed = (text || "").trim();
+  if (!trimmed || trimmed.charAt(0) !== "{") return { text: text, calls: [] };
+  try {
+    var recovered = normalizeRecoveredToolCall(JSON.parse(trimmed));
+    if (recovered) {
+      log("recovered text tool-call -> " + recovered.function.name);
+      return { text: "", calls: [recovered] };
+    }
+  } catch (e) {
+    /* not JSON */
+  }
+  return { text: text, calls: [] };
+}
+
 function toOpenAITools(tools) {
   if (!Array.isArray(tools) || !tools.length) return undefined;
   var out = [];
@@ -570,6 +638,9 @@ function hopFullStream(exec, hopSess, binding, compaction, ctx, invocationId, to
       } else if (embedded.text !== text) {
         text = embedded.text;
       }
+      var recovered = recoverTextToolCalls(text, calls);
+      text = recovered.text;
+      calls = recovered.calls;
       if (calls.length) {
         for (var tc = 0; tc < calls.length; tc++) {
           var tfn = (calls[tc] && calls[tc].function) || {};
@@ -600,6 +671,7 @@ function hopFullStream(exec, hopSess, binding, compaction, ctx, invocationId, to
         u.cacheWriteTokens = extras.cacheWriteTokens;
       }
       var finish = (out && out.finish_reason) || "stop";
+      if (calls.length && finish === "stop") finish = "tool_calls";
       if (finish === "tool_calls") finish = "tool-calls";
       var assistantContent = buildAssistantResponseContent(out, text, calls);
       var contentParts = Array.isArray(assistantContent) ? assistantContent.length : 0;

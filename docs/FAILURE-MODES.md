@@ -106,6 +106,13 @@ Legend: SYMPTOM (what you see) → CAUSE (what's actually wrong) → LOCK (the f
 - **CAUSE:** exclusive locks on credential databases.
 - **LOCK:** dedicated profiles/dir copies for automation; never fight the user's live session.
 
+## F. Grok Bot + GLM hop
+
+### F19 — GLM returns SendToUser as plain JSON text
+- **SYMPTOM:** Gateway accepts user messages; bot runs; user sees **no reply** in Grok Bot chat. Transcript assistant TEXT is JSON like `{"type":"text","content":"Pong","end_turn":true}`. `send-acceptance.json` shows accepted.
+- **CAUSE:** Hop model emits user-facing content as **plain text** instead of a tool call. Grok Bot only surfaces **`SendToUser`** / `SendMessage`. Wrong recovery (tool name `send_message` or args `{text:{content}}`) also fails host Zod validation.
+- **LOCK:** `recoverTextToolCalls` in `tools/opengrok-runtime.cjs` — map JSON-as-text to **`SendToUser`** with `{"type":"text","content":"…"}`. Verify: `/tmp/opengrok-session.log` shows `recovered text tool-call -> SendToUser` and transcript gets `messageId: t…sN`. See [`BOX-RUNBOOK.md`](BOX-RUNBOOK.md).
+
 ---
 
 *Additions welcome — include reproduction steps and the lock that worked.*

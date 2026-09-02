@@ -89,6 +89,8 @@ It does not add a model picker inside the Grok Bot desktop app.
 BYOK UI is gated off for consumer accounts (`ModelAllowlistByok` exists in
 the protobuf, not in the settings screen).
 
+**After host updates / silent replies:** see [`BOX-RUNBOOK.md`](BOX-RUNBOOK.md).
+
 Mac-only hop (`127.0.0.1` on your laptop) is unreachable from the cloud
 computer. The hop must run on the box.
 
